@@ -1,0 +1,37 @@
+{-# STDLIB_VERSION 3 #-}
+{-# CONTENT_TYPE EXPRESSION #-}
+{-# SCRIPT_TYPE ACCOUNT #-}
+
+let digiliraPay = base58'57EFni8M1XesEurFh3c4jnpLExP2PCPd5TRrwMjePAT4'
+
+match (tx) {
+
+    case w:TransferTransaction  =>
+        if (isDefined(w.assetId)) then {
+            true
+        }else {
+            if (w.recipient == addressFromPublicKey(digiliraPay)) then {
+                true
+            } else {
+             throw(("Unfortunately you can only send waves to issuer..."))
+            }
+        }
+    
+    case x:BurnTransaction | LeaseTransaction | Order =>
+        false
+    
+    case t:SetScriptTransaction | ExchangeTransaction | DataTransaction =>
+        sigVerify(t.bodyBytes, t.proofs[1], digiliraPay) 
+    
+    case mtt:MassTransferTransaction => {
+        let firstRecipient = mtt.transfers[0].recipient
+        let firstAmount = mtt.transfers[0].amount
+        let assetId = extract(mtt.assetId)
+
+        false
+    }
+    case _ =>
+        true
+ }
+
+

@@ -1,0 +1,205 @@
+{-# STDLIB_VERSION 2 #-}
+{-# CONTENT_TYPE EXPRESSION #-}
+{-# SCRIPT_TYPE ASSET #-}
+
+let admin = Address(base58'3NCpyPuNzUaB7LFS4KBzwzWVnXmjur582oy')
+let gateway = Address(base58'3NCpyPuNzUaB7LFS4KBzwzWVnXmjur582oy')
+
+let banned = 403
+let KYCVer1 = 1
+let KYCVer2 = 2
+let isMerchant = 5
+let KYCPending = 0
+
+let maxAmount = 100000000
+
+match (tx) {
+    case t: TransferTransaction =>
+
+        let data = getInteger(admin, toBase58String(t.sender.bytes))
+        let amount = t.amount
+        let assetId = extract(t.assetId)
+        let isUser =  getInteger(admin, toBase58String(addressFromRecipient(t.recipient).bytes))
+
+        # if you are a member 
+        if (!isDefined(data)) then {
+            throw("You are not a registered member. You cannot transfer this SmartAsset!")
+        } else if (data == KYCPending) then {
+            throw("KYC Pending. You cannot transfer this SmartAsset")
+        } else if (data == KYCVer1) then {
+            if (t.recipient == gateway) then {
+                true
+            } else {
+                if (isUser == KYCVer1 || isUser == KYCVer2 || isUser == isMerchant) then {
+                    if (amount <= maxAmount) then {            
+                        true
+                    }else {
+                        throw("Cannot transfer please verify your acount. Amount is too much!")
+                    }
+                }else if (isUser == KYCPending) then {
+                        throw("The recipient is in KYC pending status. You cannot transfer this SmartAsset")
+                }else if (isUser == banned) then {
+                        throw("The recipient is banned. You cannot transfer this SmartAsset")
+                }else {
+                    throw("Undefined situation!")
+                }
+            }
+
+        } else if (data == KYCVer2) then {
+
+            # if recipient is a member 
+            if (isDefined(isUser)) then {
+                # if recipient is kyc 1
+                if (isUser == KYCVer1) then {
+                    if (amount <= maxAmount) then {            
+                        true
+                    }else {
+                        throw("Cannot transfer please verify your acount. Amount is too much!")
+                    }
+                }else if (isUser == KYCPending) then {
+                        throw("The recipient is in KYC pending status. You cannot transfer this SmartAsset")
+                }else if (isUser == KYCVer2  || isUser == isMerchant) then {
+                        true
+                }else if (isUser == banned) then {
+                        throw("The recipient is banned. You cannot transfer this SmartAsset")
+                }else {
+                    throw("Undefined situation!")
+                }
+            }else{
+                throw("The recipient is not authorized to possess this SmartAsset!")
+            }
+        }else if (data == banned) then {
+            throw("Your acount has been suspended!")
+        }else if (data == isMerchant) then{
+            if (t.recipient == gateway) then {
+                true
+            } else {
+                throw("Cannot transfer this asset to another account.")
+            }
+        }else {
+            throw("Undefined situation!")
+        }
+
+    case mtt:MassTransferTransaction => {
+
+        let data = getInteger(admin, toBase58String(mtt.sender.bytes))
+        let amount = mtt.totalAmount
+        let assetId = extract(mtt.assetId)
+        let transferCount = mtt.transferCount
+    
+        let firstRecipient = mtt.transfers[0].recipient
+        let secondRecipient = mtt.transfers[1].recipient
+        let firstAmount = mtt.transfers[0].amount
+        let secondAmount = mtt.transfers[1].amount
+        let issueTransaction = transactionById(assetId)
+
+        let isUser =  getInteger(admin, toBase58String(addressFromRecipient(secondRecipient).bytes))
+        # if recipient is a member 
+        if (!isDefined(isUser)) then {
+            false
+        } else if (transferCount > 2) then {
+            throw("not allowed")
+        }else if (!isDefined(data)) then {
+            throw("You are not a registered member. You cannot transfer this SmartAsset!")
+        }else if (data == KYCPending) then {
+            throw("KYC Pending. You cannot transfer this SmartAsset")
+        }else if (data == KYCVer1) then {
+            if (firstRecipient != gateway) then {
+                throw("First recipient must be the issuer")
+            } else {
+                if (isUser == KYCVer1 || isUser == KYCVer2) then {
+                    if (amount <= maxAmount) then {
+                        # assetId equals to issue transaction id, so we can get issuer public key (and address) from the issue transaction
+                        match(issueTransaction) {
+                            case issueTx: IssueTransaction => {
+                                let issuerAddress = addressFromPublicKey(issueTx.senderPublicKey)
+                                # to set tax amount, issuer should make a data transaction with integer value by key matching assetId
+                                let taxSize = extract(getInteger(issuerAddress, toBase58String(assetId)))
+
+                                firstRecipient == issuerAddress # recipient for the first transfer should be the issuer address
+                                &&
+                                firstAmount >= (secondAmount / 1000) * taxSize # tax amount can't be less than defined in data transaction
+                            }
+                            case _ => false
+                        }
+                    }else {
+                        throw("Cannot transfer please verify your acount. Amount is too much!")
+                    }
+                }else if (isUser == KYCPending) then {
+                        throw("The recipient is in KYC pending status. You cannot transfer this SmartAsset")
+                }else if (isUser == banned) then {
+                        throw("The recipient is banned. You cannot transfer this SmartAsset")
+                }else if (isUser == isMerchant) then {
+                        throw("Merchants cannot recieve mass payments")
+                }else {
+                    throw("Undefined situation!")
+                }
+            }
+        } else if (data == KYCVer2) then {
+            # if recipient is a member 
+            if (isDefined(isUser)) then {
+                # if recipient is kyc 1
+                if (isUser == KYCVer1) then {
+                    if (amount <= maxAmount) then {            
+                        # assetId equals to issue transaction id, so we can get issuer public key (and address) from the issue transaction
+                        match(issueTransaction) {
+                            case issueTx: IssueTransaction => {
+                                let issuerAddress = addressFromPublicKey(issueTx.senderPublicKey)
+                                # to set tax amount, issuer should make a data transaction with integer value by key matching assetId
+                                let taxSize = extract(getInteger(issuerAddress, toBase58String(assetId)))
+
+                                firstRecipient == issuerAddress # recipient for the first transfer should be the issuer address
+                                &&
+                                firstAmount >= (secondAmount / 1000) * taxSize # tax amount can't be less than defined in data transaction
+                            }
+                            case _ => false
+                        }
+                    }else {
+                        throw("Cannot transfer please verify your acount. Amount is too much!")
+                    }
+                }else if (isUser == KYCVer1) then {
+                        throw("The recipient is in KYC pending status. You cannot transfer this SmartAsset")
+                }else if (isUser == KYCVer2) then {
+                    # assetId equals to issue transaction id, so we can get issuer public key (and address) from the issue transaction
+                    match(issueTransaction) {
+                        case issueTx: IssueTransaction => {
+                            let issuerAddress = addressFromPublicKey(issueTx.senderPublicKey)
+                            # to set tax amount, issuer should make a data transaction with integer value by key matching assetId
+                            let taxSize = extract(getInteger(issuerAddress, toBase58String(assetId)))
+
+                            firstRecipient == issuerAddress # recipient for the first transfer should be the issuer address
+                            &&
+                            firstAmount >= (secondAmount / 1000) * taxSize # tax amount can't be less than defined in data transaction
+                        }
+                        case _ => false
+                    }
+                }else if (isUser == banned) then {
+                        throw("The recipient is banned. You cannot transfer this SmartAsset")
+                }else if (isUser == isMerchant) then {
+                        throw("Merchants cannot recieve mass payments")
+                }else {
+                    throw("Undefined situation!")
+                }
+            }else{
+                throw("The recipient is not authorized to possess this SmartAsset!")
+            }
+        }else if (data == banned) then {
+            throw("Your acount has been suspended!")
+        }else if (data == isMerchant) then {
+            throw("Merchant account cannot perform mass transfer")
+        }else {
+            throw("Undefined situation!")
+        }
+    }
+    case ex: ExchangeTransaction => false
+    case b:BurnTransaction => false
+    case script:SetAssetScriptTransaction => {
+        if (script.sender == admin) then {
+            true
+        } else {
+            throw("Admin operation only..")
+        }
+    }
+    case _ => true
+}
+
