@@ -6,9 +6,9 @@ let admin = Address(base58'3NCpyPuNzUaB7LFS4KBzwzWVnXmjur582oy')
 let gateway = Address(base58'3NCpyPuNzUaB7LFS4KBzwzWVnXmjur582oy')
 
 let banned = 403
-let KYCVer1 = 1
-let KYCVer2 = 2
-let isMerchant = 5
+let KYCVer1 = 0
+let KYCVer2 = 0
+let isMerchant = 0
 let KYCPending = 0
 
 let maxAmount = 100000000
@@ -18,7 +18,6 @@ match (tx) {
 
         let data = getInteger(admin, toBase58String(t.sender.bytes))
         let amount = t.amount
-        let assetId = extract(t.assetId)
         let isUser =  getInteger(admin, toBase58String(addressFromRecipient(t.recipient).bytes))
 
         # if you are a member 
@@ -202,4 +201,3 @@ match (tx) {
     }
     case _ => true
 }
-
