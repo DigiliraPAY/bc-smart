@@ -1,22 +1,124 @@
-{-# STDLIB_VERSION 3 #-}
+{-# STDLIB_VERSION 4 #-}
 {-# CONTENT_TYPE EXPRESSION #-}
 {-# SCRIPT_TYPE ACCOUNT #-}
 
 let digiliraPay = base58'57EFni8M1XesEurFh3c4jnpLExP2PCPd5TRrwMjePAT4'
 
-match (tx) {
+let sponsorToken = base58'7GnHzTaDe3YbDiCD9rueHiSfPB7hdanPpN4Ab79fJGtD'
+let paymentToken = base58'FLsa9hfu1jvXC6jhDP2x6DHHQHK2qiKPtS7D74ZFNsE1'
+let proxyWaves = base58'nqAJcPZzdav7orQg3U78Nno2eF4J9bmeBbU2WtPaYkv'
 
+let banned = 403000
+let KYCPending = 0
+
+let transferBlock = 100
+let paymentBlock = 200
+let fundBlock = 300
+let paymentFundBlock = 400
+let upperBlock = 500
+
+match (tx) {
     case w:TransferTransaction  =>
-        if (isDefined(w.assetId)) then {
-            true
-        }else {
-            if (w.recipient == addressFromPublicKey(digiliraPay)) then {
-                true
-            } else {
-             throw(("Unfortunately you can only send waves to issuer..."))
+        let myStatus = getInteger(addressFromPublicKey(digiliraPay), toBase58String(w.sender.bytes))
+        let isUser =  getInteger(addressFromPublicKey(digiliraPay), toBase58String(addressFromRecipient(w.recipient).bytes))
+
+        let feeToken = w.feeAssetId
+        let feeAmount = w.fee
+
+        let asset = valueOrElse(w.assetId, proxyWaves)
+        let isAsset =  getInteger(addressFromPublicKey(digiliraPay), toBase58String(asset))
+         
+
+       if (isDefined(isUser)) then { # is recipient a DP user
+                if (isDefined(feeToken)) then {
+                    if (feeToken == sponsorToken) then {
+                        if (isDefined(isAsset)) then {
+                            if (isAsset == banned) then {
+                                throw("Can not transfer this asset 1")
+                            } else if ((transferBlock <= valueOrElse(isAsset,banned) && paymentBlock >= valueOrElse(isAsset,banned)) || (fundBlock <= valueOrElse(isAsset,banned) && paymentFundBlock >= valueOrElse(isAsset,banned) )) then { # is recipient eligible
+                                if (valueOrElse(isUser,0) >= valueOrElse(isAsset,banned)) then { # is recipient eligible
+                                    true
+                                } else {
+                                    throw("This asset has special requirements 2")
+                                }
+                            } else {
+                                throw("Can not transfer this asset 1")
+                            }
+                        } else {
+                            true # not defined - any coin
+                        }
+                    } else if (feeToken == paymentToken) then {  # payment block
+                        if (w.recipient == addressFromPublicKey(digiliraPay)) then {
+                            if (myStatus == KYCPending) then {
+                                throw("KYC Pending")
+                            }  else if (myStatus == banned) then {
+                                throw("Account Banned Can't Operate")
+                            } else {
+                                if feeAmount > 10 then {
+                                throw("Not Allowed")
+                            } else {
+
+                            if (isAsset == banned) then {
+                                throw("Can not transfer this asset 3")
+                            } else if ((paymentBlock <= valueOrElse(isAsset,banned) && fundBlock >= valueOrElse(isAsset,banned)) || (paymentFundBlock <= valueOrElse(isAsset,banned) && upperBlock >= valueOrElse(isAsset,banned) )) then { # is recipient eligible
+                                if (valueOrElse(isUser,0) >= valueOrElse(isAsset,banned)) then { # is recipient eligible
+                                    true
+                                } else {
+                                    throw("This asset has special requirements 2")
+                                }
+                            } else {
+                                throw("Can not transfer this asset 4")
+                            }
+                            }
+                            }
+                        } else {
+                        throw("Unfortunately you can only use this token for payments")
+                        }
+                    } else {
+                        if (isDefined(isAsset)) then {
+                            if (isAsset == banned) then {
+                                throw("Can not transfer this asset 5")
+                            } else if (valueOrElse(myStatus,0) >= valueOrElse(isAsset,banned)) then { # is recipient eligible
+                                true
+                            } else {
+                                throw("This asset has special requirements 2")
+                            }
+                        } else {
+                            true
+                        }
+                    }
+                } else {
+                    if (isDefined(isAsset)) then {
+                        if (valueOrElse(isAsset,0) == banned) then {
+                            throw("Can not transfer this asset")
+                        } else if (valueOrElse(isUser,0) >= valueOrElse(isAsset,banned)) then { # is recipient eligible
+                            true
+                        } else {
+                            throw("This asset has special requirements 1")
+                        }
+                    } else {
+                        true
+                    }
+                }
+        } else {
+            if (isDefined(isAsset)) then {
+                    throw("cant transfer") 
+                } else {
+                    if (isDefined(feeToken)) then { 
+                        if (feeToken == sponsorToken) then {
+                            throw("Cannot use this token for none DigiliraPay users transfers.") 
+                        } else if (feeToken == paymentToken) then {                         
+                            throw("Unfortunately you can only use this token for payments") 
+                        } else {
+                            true
+                    }
+                } else {
+                    true
+                } 
             }
+                
+
         }
-    
     case x:BurnTransaction | LeaseTransaction | Order =>
         false
     
@@ -24,14 +126,8 @@ match (tx) {
         sigVerify(t.bodyBytes, t.proofs[1], digiliraPay) 
     
     case mtt:MassTransferTransaction => {
-        let firstRecipient = mtt.transfers[0].recipient
-        let firstAmount = mtt.transfers[0].amount
-        let assetId = extract(mtt.assetId)
-
         false
     }
     case _ =>
         true
  }
-
-
