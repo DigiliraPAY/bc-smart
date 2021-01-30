@@ -25,7 +25,7 @@ let paymentFundBlock = 300
 let fundBlock = 400
 let upperBlock = 500
 
-func recovery(w: TransferTransaction) = {
+func recovery(w: TransferTransaction | SetScriptTransaction | DataTransaction) = {
     let s1 = if(sigVerify(tx.bodyBytes, tx.proofs[0], recovery1 )) then 1 else 0
     let s2 = if(sigVerify(tx.bodyBytes, tx.proofs[1], recovery2 )) then 1 else 0
     let s3 = if(sigVerify(tx.bodyBytes, tx.proofs[2], recovery3 )) then 1 else 0
@@ -39,7 +39,7 @@ func recovery(w: TransferTransaction) = {
 
 func transfer(w: TransferTransaction, lowerLimit: Int, upperLimit: Int, isAsset: Int|Unit, isUser: Int|Unit, myStatus: Int|Unit) = {
 
-    if (isUser == -1 && ( w.feeAssetId == sponsorToken || w.feeAssetId == paymentToken) then {
+    if (isUser == -1 && (w.feeAssetId == sponsorToken || w.feeAssetId == paymentToken)) then {
         throw("This fee token cannot be used for transfering tokens to non DigiliraPay users")
     } else {
         if (isDefined(isAsset)) then {
@@ -85,13 +85,9 @@ match (tx) {
         } else {
             transfer(w, transferBlock, paymentFundBlock, isAsset, -1, myStatus)  # is recipient is not digilirapay user
         }
-    case x:BurnTransaction | LeaseTransaction | Order =>
-        false
-    
-    case t:SetScriptTransaction | ExchangeTransaction | DataTransaction =>
-        sigVerify(t.bodyBytes, t.proofs[1], digiliraPay) 
-    
-    case mtt:MassTransferTransaction => 
+    case t:SetScriptTransaction | DataTransaction =>
+        recovery(t)
+    case x:MassTransferTransaction | BurnTransaction | LeaseTransaction | Order | ExchangeTransaction => 
         false
     case _ =>
         false
