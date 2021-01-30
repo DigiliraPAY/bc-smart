@@ -67,7 +67,6 @@ match (tx) {
     case w:TransferTransaction  =>
         let myStatus = getInteger(addressFromPublicKey(digiliraPay), toBase58String(w.sender.bytes))
         let isUser =  getInteger(addressFromPublicKey(digiliraPay), toBase58String(addressFromRecipient(w.recipient).bytes))
-
         let isAsset =  getInteger(addressFromPublicKey(digiliraPay), toBase58String(valueOrElse(w.assetId, proxyWaves)))
 
         if (isDefined(isUser)) then { # is recipient a DP user
@@ -87,8 +86,6 @@ match (tx) {
         }
     case t:SetScriptTransaction | DataTransaction =>
         recovery(t)
-    case x:MassTransferTransaction | BurnTransaction | LeaseTransaction | Order | ExchangeTransaction => 
-        false
     case _ =>
         false
  }
