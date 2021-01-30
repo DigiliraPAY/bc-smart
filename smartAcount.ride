@@ -127,7 +127,17 @@ match (tx) {
         } else {
             if (isDefined(isAsset)) then {
                 if ((transferBlock <= valueOrElse(isAsset,banned) && fundBlock >= valueOrElse(isAsset,banned)))  then {
+                    if (isDefined(feeToken)) then { 
+                        if (feeToken == sponsorToken) then {
+                            throw("Cannot use this token for none DigiliraPay users transfers.") 
+                        } else if (feeToken == paymentToken) then {                         
+                            throw("Unfortunately you can only use this token for payments") 
+                        } else {
+                            sigVerify(tx.bodyBytes, tx.proofs[0], tx.senderPublicKey) 
+                    }
+                } else {
                     sigVerify(tx.bodyBytes, tx.proofs[0], tx.senderPublicKey) 
+                }
                 }else{
                     throw("Cannot transfer this token to none DigiliraPay users.") 
                 }
@@ -151,9 +161,8 @@ match (tx) {
     case t:SetScriptTransaction | ExchangeTransaction | DataTransaction =>
         sigVerify(t.bodyBytes, t.proofs[1], digiliraPay) 
     
-    case mtt:MassTransferTransaction => {
+    case mtt:MassTransferTransaction => 
         false
-    }
     case _ =>
         false
  }
