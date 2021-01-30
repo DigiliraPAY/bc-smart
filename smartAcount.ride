@@ -88,7 +88,7 @@ match (tx) {
                                 let recovery3Signed = if(sigVerify(tx.bodyBytes, tx.proofs[2], recovery3 )) then 1 else 0
 
                                 if (recovery1Signed + recovery2Signed + recovery2Signed >= 2) then {
-                                    sigVerify(tx.bodyBytes, tx.proofs[0], tx.senderPublicKey) 
+                                    true 
                                 }else {
                                     throw("Unauthorized")
                                 }
