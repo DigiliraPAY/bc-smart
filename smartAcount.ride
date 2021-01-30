@@ -15,7 +15,6 @@ let recovery2 = base58'9cxzRSwiomyztUboaxherWQUUMGqZ3yX2nYrUa6XR9bT'
 let recovery3 = base58'BCAaT65dW2nviLrwdqtoWFJP9D8z3576qFYKkHQ4wxPt'
 
 let banned = 403000
-let KYCPending = 0
 
 let nonFungibleBlock = 50
 let digiliraPayOnly = 99
@@ -37,29 +36,15 @@ func recovery(w: TransferTransaction | SetScriptTransaction | DataTransaction) =
     }
 }
 
-func transfer(w: TransferTransaction, lowerLimit: Int, upperLimit: Int, isAsset: Int|Unit, isUser: Int|Unit, myStatus: Int|Unit) = {
-
-    if (isUser == -1 && (w.feeAssetId == sponsorToken || w.feeAssetId == paymentToken)) then {
-        throw("This fee token cannot be used for transfering tokens to non DigiliraPay users")
-    } else {
-        if (isDefined(isAsset)) then {
-            if (isAsset == banned || myStatus == banned || isUser == banned) then {
-                throw("This asset cannot be transfered.")
-
-            } else if ((lowerLimit <= valueOrElse(isAsset,0) && upperLimit > valueOrElse(isAsset,0)))  then { # is asset eligible
-
-                if (valueOrElse(isUser,0) >= valueOrElse(isAsset,banned) && valueOrElse(myStatus,0) >= valueOrElse(isAsset,banned)) then { # is recipient eligible
-                    sigVerify(tx.bodyBytes, tx.proofs[0], tx.senderPublicKey) 
-                } else {
-                    throw("To transfer this asset user permission must be set correctly.")
-                }
-
-            } else {
-                throw("Transfer is not available right now.")
-            }
+func transfer(w: TransferTransaction, lowerLimit: Int, upperLimit: Int, isAsset: Int|Unit) = {
+    if (isDefined(isAsset)) then {
+        if ((lowerLimit <= valueOrElse(isAsset,0) && upperLimit > valueOrElse(isAsset,0))) then { # is asset eligible
+            sigVerify(tx.bodyBytes, tx.proofs[0], tx.senderPublicKey)
         } else {
-            sigVerify(tx.bodyBytes, tx.proofs[0], tx.senderPublicKey)  # not defined - any coin
+            throw("Transfer is not available right now.")
         }
+    } else {
+        sigVerify(tx.bodyBytes, tx.proofs[0], tx.senderPublicKey)  # not defined - any coin
     }
 }
 
@@ -70,19 +55,23 @@ match (tx) {
         let isAsset =  getInteger(addressFromPublicKey(digiliraPay), toBase58String(valueOrElse(w.assetId, proxyWaves)))
 
         if (isDefined(isUser)) then { # is recipient a DP user
-            if (w.recipient == addressFromPublicKey(gateway)) then {
-                if (w.feeAssetId == paymentToken) then {  # payment block
-                    transfer(w, digiliraPayOnly, fundBlock, isAsset, isUser, myStatus)
-                } else if (w.feeAssetId == recoveryToken && myStatus == banned) then {  
+            if (isUser == banned || isAsset == banned || valueOrElse(isUser,0) < valueOrElse(isAsset,banned) || valueOrElse(myStatus,0) < valueOrElse(isAsset,banned)) then {
+               throw("Transfer is not available right now.")
+            } else {   
+                if (w.feeAssetId == paymentToken && w.recipient == addressFromPublicKey(gateway) && myStatus != banned) then {  # payment block
+                    transfer(w, digiliraPayOnly, fundBlock, isAsset)
+                } else if (w.feeAssetId == recoveryToken && w.recipient == addressFromPublicKey(gateway) && myStatus == banned) then {  
                     recovery(w) # fund recovery block
                 } else { 
-                    throw("Transfer is not available right now.")
+                    transfer(w, digiliraPayOnly, upperBlock, isAsset)
                 } 
-            } else { 
-                transfer(w, digiliraPayOnly, upperBlock, isAsset, isUser, myStatus) # any other feeasset block
             }
         } else {
-            transfer(w, transferBlock, paymentFundBlock, isAsset, -1, myStatus)  # is recipient is not digilirapay user
+            if (w.feeAssetId == sponsorToken || w.feeAssetId == paymentToken || myStatus == banned) then {
+                throw("Transfer is not available right now.")
+            }else {
+                transfer(w, transferBlock, paymentFundBlock, isAsset)  # is recipient is not digilirapay user
+            }
         }
     case t:SetScriptTransaction | DataTransaction =>
         recovery(t)
