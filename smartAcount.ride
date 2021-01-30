@@ -49,7 +49,7 @@ match (tx) {
                 }
             } else {   
                 if (w.recipient == addressFromPublicKey(gateway)) then {  # payment block
-                    if (fundBlock > valueOrElse(isAsset,0)) then {
+                    if (fundBlock > valueOrElse(isAsset,0) && paymentBlock <= valueOrElse(isAsset,0)) then {
                         sigVerify(tx.bodyBytes, tx.proofs[0], tx.senderPublicKey)
                     } else {
                         throw("Transfer is not available right now. Asset cannot be used on payment transactions.")
