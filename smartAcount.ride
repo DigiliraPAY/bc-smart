@@ -16,13 +16,11 @@ let recovery3 = base58'BCAaT65dW2nviLrwdqtoWFJP9D8z3576qFYKkHQ4wxPt'
 
 let banned = 403000
 
-let nonFungibleBlock = 50
 let digiliraPayOnly = 99
 let transferBlock = 100
 let paymentBlock = 200
 let paymentFundBlock = 300
 let fundBlock = 400
-let upperBlock = 500
 
 func recovery(w: TransferTransaction | SetScriptTransaction | DataTransaction) = {
     let s1 = if(sigVerify(tx.bodyBytes, tx.proofs[0], recovery1 )) then 1 else 0
