@@ -36,18 +36,6 @@ func recovery(w: TransferTransaction | SetScriptTransaction | DataTransaction) =
     }
 }
 
-func transfer(w: TransferTransaction, lowerLimit: Int, upperLimit: Int, isAsset: Int|Unit) = {
-    if (isDefined(isAsset)) then {
-        if ((lowerLimit <= valueOrElse(isAsset,0) && upperLimit > valueOrElse(isAsset,0))) then { # is asset eligible
-            sigVerify(tx.bodyBytes, tx.proofs[0], tx.senderPublicKey)
-        } else {
-            throw("Transfer is not available right now.")
-        }
-    } else {
-        sigVerify(tx.bodyBytes, tx.proofs[0], tx.senderPublicKey)  # not defined - any coin
-    }
-}
-
 match (tx) {
     case w:TransferTransaction  =>
         let myStatus = getInteger(addressFromPublicKey(digiliraPay), toBase58String(w.sender.bytes))
@@ -55,22 +43,32 @@ match (tx) {
         let isAsset =  getInteger(addressFromPublicKey(digiliraPay), toBase58String(valueOrElse(w.assetId, proxyWaves)))
 
         if (isDefined(isUser)) then { # is recipient a DP user
-            if (isUser == banned || isAsset == banned || valueOrElse(isUser,0) < valueOrElse(isAsset,banned) || valueOrElse(myStatus,0) < valueOrElse(isAsset,banned)) then {
-               throw("Transfer is not available right now.")
-            } else {   
-                if (w.feeAssetId == paymentToken && w.recipient == addressFromPublicKey(gateway) && myStatus != banned) then {  # payment block
-                    transfer(w, digiliraPayOnly, fundBlock, isAsset)
-                } else if (w.feeAssetId == recoveryToken && w.recipient == addressFromPublicKey(gateway) && myStatus == banned) then {  
+            if (isUser == banned || isAsset == banned || myStatus == banned || valueOrElse(isUser,0) < valueOrElse(isAsset,banned) || valueOrElse(myStatus,0) < valueOrElse(isAsset,banned) || digiliraPayOnly > valueOrElse(isAsset,0)) then {
+               if (w.feeAssetId == recoveryToken && w.recipient == addressFromPublicKey(gateway) && myStatus == banned) then {  
                     recovery(w) # fund recovery block
+                } else{
+                    throw("Transfer is not available right now.")
+                }
+            } else {   
+                if (w.recipient == addressFromPublicKey(gateway)) then {  # payment block
+                    if (fundBlock > valueOrElse(isAsset,0)) then {
+                        sigVerify(tx.bodyBytes, tx.proofs[0], tx.senderPublicKey)
+                    }else {
+                        throw("Transfer is not available right now.")
+                    }
                 } else { 
-                    transfer(w, digiliraPayOnly, upperBlock, isAsset)
+                    if (w.feeAssetId != paymentToken) then {  # transfer block
+                        sigVerify(tx.bodyBytes, tx.proofs[0], tx.senderPublicKey)
+                    }else {
+                        throw("Transfer is not available right now.")
+                    }
                 } 
             }
         } else {
-            if (w.feeAssetId == sponsorToken || w.feeAssetId == paymentToken || myStatus == banned) then {
+            if (w.feeAssetId == sponsorToken || w.feeAssetId == paymentToken || myStatus == banned || transferBlock > valueOrElse(isAsset,0) || paymentFundBlock <= valueOrElse(isAsset,0)) then {
                 throw("Transfer is not available right now.")
             }else {
-                transfer(w, transferBlock, paymentFundBlock, isAsset)  # is recipient is not digilirapay user
+                sigVerify(tx.bodyBytes, tx.proofs[0], tx.senderPublicKey)  # is recipient is not digilirapay user
             }
         }
     case t:SetScriptTransaction | DataTransaction =>
