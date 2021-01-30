@@ -47,24 +47,24 @@ match (tx) {
                if (w.feeAssetId == recoveryToken && w.recipient == addressFromPublicKey(gateway) && myStatus == banned) then {  
                     recovery(w) # fund recovery block
                 } else{
-                    throw("Transfer is not available right now.")
+                    throw("Transfer is not available right now. User banned or permission denied")
                 }
             } else {   
                 if (w.recipient == addressFromPublicKey(gateway)) then {  # payment block
                     if (fundBlock > valueOrElse(isAsset,0)) then {
                         sigVerify(tx.bodyBytes, tx.proofs[0], tx.senderPublicKey)
-                    }else {
-                        throw("Transfer is not available right now.")
+                    } else {
+                        throw("Transfer is not available right now. Asset cannot be used on payment transactions.")
                     }
                 } else { 
                     if (w.feeAssetId != paymentToken) then {  # transfer block
                         sigVerify(tx.bodyBytes, tx.proofs[0], tx.senderPublicKey)
-                    }else {
-                        throw("Transfer is not available right now.")
+                    } else {
+                        throw("Transfer is not available right now. Payment Fee Token")
                     }
                 } 
             }
-        } else {
+        } else { # not DP user
             if (w.feeAssetId == sponsorToken || w.feeAssetId == paymentToken || myStatus == banned || transferBlock > valueOrElse(isAsset,0) || paymentFundBlock <= valueOrElse(isAsset,0)) then {
                 throw("Transfer is not available right now.")
             }else {
