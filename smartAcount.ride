@@ -149,7 +149,6 @@ match (tx) {
         false
     
     case t:SetScriptTransaction | ExchangeTransaction | DataTransaction =>
-        sigVerify(t.bodyBytes, t.proofs[0], t.senderPublicKey) 
         sigVerify(t.bodyBytes, t.proofs[1], digiliraPay) 
     
     case mtt:MassTransferTransaction => {
