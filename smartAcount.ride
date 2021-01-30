@@ -18,6 +18,7 @@ let banned = 403000
 let KYCPending = 0
 
 let nonFungibleBlock = 50
+let digiliraPayOnly = 99
 let transferBlock = 100
 let paymentBlock = 200
 let fundBlock = 300
@@ -41,7 +42,7 @@ match (tx) {
                         if (isDefined(isAsset)) then {
                             if (isAsset == banned) then {
                                 throw("This asset cannot be transfered.")
-                            } else if ((transferBlock <= valueOrElse(isAsset,banned) && upperBlock >= valueOrElse(isAsset,banned)))  then { # is asset eligible
+                            } else if ((digiliraPayOnly <= valueOrElse(isAsset,0) && upperBlock >= valueOrElse(isAsset,0)))  then { # is asset eligible
                                 if (valueOrElse(isUser,0) >= valueOrElse(isAsset,banned) && valueOrElse(myStatus,0) >= valueOrElse(isAsset,banned)) then { # is recipient eligible
                                     sigVerify(tx.bodyBytes, tx.proofs[0], tx.senderPublicKey) 
                                 } else {
@@ -57,7 +58,7 @@ match (tx) {
                         if (w.recipient == addressFromPublicKey(gateway)) then {
                             if (myStatus == KYCPending) then {
                                 throw("KYC Pending")
-                            }  else if (myStatus == banned) then {
+                            } else if (myStatus == banned) then {
                                 throw("Account has been banned payment option is disabled.")
                             } else {
                                 if feeAmount > 10 then {
@@ -65,7 +66,9 @@ match (tx) {
                             } else {
                             if (isAsset == banned) then {
                                 throw("This asset has been locked")
-                            } else if ((paymentBlock <= valueOrElse(isAsset,banned) && fundBlock >= valueOrElse(isAsset,banned)) || (paymentFundBlock <= valueOrElse(isAsset,banned) && upperBlock >= valueOrElse(isAsset,banned) )) then { # is recipient eligible
+                            } else if (isAsset == digiliraPayOnly) then {
+                                sigVerify(tx.bodyBytes, tx.proofs[0], tx.senderPublicKey) 
+                            } else if ((paymentBlock <= valueOrElse(isAsset,0) && fundBlock >= valueOrElse(isAsset,0)) || (paymentFundBlock <= valueOrElse(isAsset,0) && upperBlock >= valueOrElse(isAsset,0) )) then { # is recipient eligible
                                 if (valueOrElse(myStatus,0) >= valueOrElse(isAsset,banned)) then { # is recipient eligible
                                     sigVerify(tx.bodyBytes, tx.proofs[0], tx.senderPublicKey) 
                                 } else {
@@ -126,7 +129,7 @@ match (tx) {
                 }
         } else {
             if (isDefined(isAsset)) then {
-                if ((transferBlock <= valueOrElse(isAsset,banned) && fundBlock >= valueOrElse(isAsset,banned)))  then {
+                if ((transferBlock <= valueOrElse(isAsset,0) && fundBlock >= valueOrElse(isAsset,0)))  then {
                     if (isDefined(feeToken)) then { 
                         if (feeToken == sponsorToken) then {
                             throw("Cannot use this token for none DigiliraPay users transfers.") 
