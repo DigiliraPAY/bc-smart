@@ -22,7 +22,7 @@ let paymentBlock = 200
 let paymentFundBlock = 300
 let fundBlock = 400
 
-func recovery(w: TransferTransaction | SetScriptTransaction | DataTransaction) = {
+func recovery() = {
     let s1 = if(sigVerify(tx.bodyBytes, tx.proofs[0], recovery1 )) then 1 else 0
     let s2 = if(sigVerify(tx.bodyBytes, tx.proofs[1], recovery2 )) then 1 else 0
     let s3 = if(sigVerify(tx.bodyBytes, tx.proofs[2], recovery3 )) then 1 else 0
@@ -34,43 +34,126 @@ func recovery(w: TransferTransaction | SetScriptTransaction | DataTransaction) =
     }
 }
 
+func checkFee(w:TransferTransaction) = {
+    let fee = w.fee
+
+    let isFeePaymentToken = w.feeAssetId == paymentToken
+    let isFeeSponsorToken = w.feeAssetId == sponsorToken
+    
+    let unScriptedFee = 5
+    let scriptedFee = 9
+
+    let isScripted = match assetInfo(valueOrElse(w.assetId, proxyWaves)) {
+        case asset:Asset =>
+        if (asset.scripted) then {
+            true
+        } else {
+            false
+        }
+        case _ => 
+            false
+    }
+
+    if (!isFeePaymentToken && !isFeeSponsorToken) then {
+        sigVerify(tx.bodyBytes, tx.proofs[0], tx.senderPublicKey) 
+    } else {
+        if ((isScripted && fee == scriptedFee) || (!isScripted && fee == unScriptedFee)) then {
+            sigVerify(tx.bodyBytes, tx.proofs[0], tx.senderPublicKey)
+        } else {
+            throw(toString(fee) + " feeAmount is wrong")     
+        }
+    } 
+}
+
+func getStatus(key: ByteVector) = {
+    getInteger(addressFromPublicKey(digiliraPay), toBase58String(key)).valueOrElse(0)
+}
+
 match (tx) {
     case w:TransferTransaction  =>
-        let myStatus = getInteger(addressFromPublicKey(digiliraPay), toBase58String(w.sender.bytes))
-        let isUser =  getInteger(addressFromPublicKey(digiliraPay), toBase58String(addressFromRecipient(w.recipient).bytes))
-        let isAsset =  getInteger(addressFromPublicKey(digiliraPay), toBase58String(valueOrElse(w.assetId, proxyWaves)))
+        let myStatus = getStatus((w.sender.bytes))
+        let recipientStatus = getStatus((addressFromRecipient(w.recipient).bytes))
+        let assetStatus = getStatus((valueOrElse(w.assetId, proxyWaves)))
 
-        if (isDefined(isUser)) then { # is recipient a DP user
-            if (isUser == banned || isAsset == banned || myStatus == banned || valueOrElse(isUser,0) < valueOrElse(isAsset,banned) || valueOrElse(myStatus,0) < valueOrElse(isAsset,banned) || digiliraPayOnly > valueOrElse(isAsset,0)) then {
-               if (w.feeAssetId == recoveryToken && w.recipient == addressFromPublicKey(gateway) && myStatus == banned) then {  
-                    recovery(w) # fund recovery block
-                } else{
-                    throw("Transfer is not available right now. User banned or permission denied")
+        let digiliraRecipient = recipientStatus > 0
+
+        let myStatusBanned = myStatus == banned
+        let recipientStatusBanned = recipientStatus == banned
+        let assetStatusBanned = assetStatus == banned
+
+        let somethingBanned = myStatusBanned || recipientStatusBanned || assetStatusBanned
+
+        let isFeeRecoveryToken = w.feeAssetId == recoveryToken
+        let isRecipientGateway = w.recipient == addressFromPublicKey(gateway)
+
+        let isFeePaymentToken = w.feeAssetId == paymentToken
+        let isFeeSponsorToken = w.feeAssetId == sponsorToken
+
+        let isExclusiveToken = digiliraPayOnly == valueOrElse(assetStatus,0)
+        let isDigiliraPayExclusive = digiliraPayOnly > valueOrElse(assetStatus,0)
+
+        let permissionTransferToDP = valueOrElse(recipientStatus,0) < valueOrElse(assetStatus,banned) || valueOrElse(myStatus,0) < valueOrElse(assetStatus,banned)
+        let permissionPayment = fundBlock > valueOrElse(assetStatus,0) && paymentBlock <= valueOrElse(assetStatus,0)
+        let permissionTransferNotDP = transferBlock > valueOrElse(assetStatus,0) || paymentFundBlock <= valueOrElse(assetStatus,0)
+
+        let isRecovery = digiliraRecipient && isFeeRecoveryToken && isRecipientGateway && myStatusBanned
+
+        if (isRecovery && recovery()) then {
+            true
+        } else if (digiliraRecipient) then {
+            
+            let prolog = "Transfer to DigiliraPay recipient: "
+
+            if (myStatusBanned) then {
+                throw(prolog + "This account has been suspended.")
+            } else if (recipientStatusBanned) then {
+                throw(prolog + "Recipient's account has been suspended.")
+            } else if (assetStatusBanned) then {
+                throw(prolog + "Asset cannot be transfered.")
+            } else if (permissionTransferToDP) then {
+                throw(prolog + "Asset cannot be transfered. Recipient/Sender is not eligible.")
+            } else if (isDigiliraPayExclusive) then {
+                throw(prolog + "Non-Transferable Token.")
+            } else if (isRecipientGateway) then {
+
+                if (permissionPayment || isExclusiveToken) then {
+                    checkFee(w)
+                } else {
+                    throw(prolog + "Asset cannot be used on payments.")
                 }
-            } else {   
-                if (w.recipient == addressFromPublicKey(gateway)) then {  # payment block
-                    if (fundBlock > valueOrElse(isAsset,0) && paymentBlock <= valueOrElse(isAsset,0)) then {
-                        sigVerify(tx.bodyBytes, tx.proofs[0], tx.senderPublicKey)
-                    } else {
-                        throw("Transfer is not available right now. Asset cannot be used on payment transactions.")
-                    }
-                } else { 
-                    if (w.feeAssetId != paymentToken) then {  # transfer block
-                        sigVerify(tx.bodyBytes, tx.proofs[0], tx.senderPublicKey)
-                    } else {
-                        throw("Transfer is not available right now. Payment Fee Token")
-                    }
-                } 
+            } else {
+
+                if (isFeePaymentToken) then { 
+                    throw(prolog + "Payment Token cannot be used.")
+                } else {
+                    checkFee(w)
+                }
             }
-        } else { # not DP user
-            if (w.feeAssetId == sponsorToken || w.feeAssetId == paymentToken || myStatus == banned || transferBlock > valueOrElse(isAsset,0) || paymentFundBlock <= valueOrElse(isAsset,0)) then {
-                throw("Transfer is not available right now.")
-            }else {
-                sigVerify(tx.bodyBytes, tx.proofs[0], tx.senderPublicKey)  # is recipient is not digilirapay user
+        } else {
+
+            let prolog = "Transfer to not DigiliraPay recipient: ";
+
+            if (isFeeSponsorToken) then {
+                throw(prolog + "Sponsor Token cannot be used.")
+            } else if (isFeePaymentToken) then {
+                throw(prolog + "Payment Token cannot be used.")
+            } else if (myStatusBanned) then {
+                throw(prolog + "This account has been suspended.")
+            } else if (permissionTransferNotDP) then {
+                throw(prolog + "This asset cannot be transfered.")
+            } else {
+                sigVerify(tx.bodyBytes, tx.proofs[0], tx.senderPublicKey)
             }
         }
     case t:SetScriptTransaction | DataTransaction =>
-        recovery(t)
+        let s1 = if(sigVerify(t.bodyBytes, t.proofs[0], t.senderPublicKey)) then 1 else 0
+        let s2 = if(sigVerify(t.bodyBytes, t.proofs[1], digiliraPay)) then 1 else 0
+
+        if (s1 + s2 == 2) then {
+            true 
+        } else {
+            throw("Unauthorized")
+        }
     case _ =>
         false
  }
