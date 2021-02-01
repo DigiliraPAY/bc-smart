@@ -155,5 +155,5 @@ match (tx) {
             throw("Unauthorized")
         }
     case _ =>
-        false
+        recovery()
  }
