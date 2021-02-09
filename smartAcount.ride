@@ -2,30 +2,30 @@
 {-# CONTENT_TYPE EXPRESSION #-}
 {-# SCRIPT_TYPE ACCOUNT #-}
 
-let digiliraPay = base58'4snGCeL4Wjopx9awWd7pfdqUYyN1CLqbPz66bn7VY8oe'
-let gateway = base58'ActWMpdeyp8YHRhLxXmwdJmr37VXGgb44m8DuSVJW3k1'
+let DIGILIRAPAY = base58'4snGCeL4Wjopx9awWd7pfdqUYyN1CLqbPz66bn7VY8oe'
+let GATEWAY = base58'ActWMpdeyp8YHRhLxXmwdJmr37VXGgb44m8DuSVJW3k1'
 
-let sponsorToken = base58'HLfv6YiY1ZpDktcKL9R79FTcez9WdMjaeMWxhREGcAqr'
-let paymentToken = base58'HDBmVe4MFyVdh1Jy48m9XqXiHAVuNbwFB8dPskVMHS6B'
-let recoveryToken = base58'HL1XtTLSdKMxB8LrkRYszqwtiSRepGTBBdnyrCqgaEVX'
-let proxyWaves = base58'WAVES'
+let SPONSORTOKEN = base58'HLfv6YiY1ZpDktcKL9R79FTcez9WdMjaeMWxhREGcAqr'
+let PAYMENTTOKEN = base58'HDBmVe4MFyVdh1Jy48m9XqXiHAVuNbwFB8dPskVMHS6B'
+let RECOVERYTOKEN = base58'HL1XtTLSdKMxB8LrkRYszqwtiSRepGTBBdnyrCqgaEVX'
+let PROXYWAVES = base58'WAVES'
 
-let recovery1 = base58'2tKRd22A8nkVNjtgT7JJxqSR8D9EA2RfsprJt35jw8Hr'
-let recovery2 = base58'9cxzRSwiomyztUboaxherWQUUMGqZ3yX2nYrUa6XR9bT'
-let recovery3 = base58'BCAaT65dW2nviLrwdqtoWFJP9D8z3576qFYKkHQ4wxPt'
+let RECOVERY1 = base58'2tKRd22A8nkVNjtgT7JJxqSR8D9EA2RfsprJt35jw8Hr'
+let RECOVERY2 = base58'9cxzRSwiomyztUboaxherWQUUMGqZ3yX2nYrUa6XR9bT'
+let RECOVERY3 = base58'BCAaT65dW2nviLrwdqtoWFJP9D8z3576qFYKkHQ4wxPt'
 
-let banned = 403000
+let BANNED = 403000
 
-let digiliraPayOnly = 99
-let transferBlock = 100
-let paymentBlock = 200
-let paymentFundBlock = 300
-let fundBlock = 400
+let DIGILIRAPAYONLY = 99
+let TRANSFERBLOCK = 100
+let PAYMENTBLOCK = 200
+let PAYMENTFUNDBLOCK = 300
+let FUNDBLOCK = 400
 
 func recovery() = {
-    let s1 = if(sigVerify(tx.bodyBytes, tx.proofs[0], recovery1 )) then 1 else 0
-    let s2 = if(sigVerify(tx.bodyBytes, tx.proofs[1], recovery2 )) then 1 else 0
-    let s3 = if(sigVerify(tx.bodyBytes, tx.proofs[2], recovery3 )) then 1 else 0
+    let s1 = if(sigVerify(tx.bodyBytes, tx.proofs[0], RECOVERY1 )) then 1 else 0
+    let s2 = if(sigVerify(tx.bodyBytes, tx.proofs[1], RECOVERY2 )) then 1 else 0
+    let s3 = if(sigVerify(tx.bodyBytes, tx.proofs[2], RECOVERY3 )) then 1 else 0
 
     if (s1 + s2 + s3 >= 2) then {
         true 
@@ -37,13 +37,13 @@ func recovery() = {
 func checkFee(w:TransferTransaction) = {
     let fee = w.fee
 
-    let isFeePaymentToken = w.feeAssetId == paymentToken
-    let isFeeSponsorToken = w.feeAssetId == sponsorToken
+    let isFeePaymentToken = w.feeAssetId == PAYMENTTOKEN
+    let isFeeSponsorToken = w.feeAssetId == SPONSORTOKEN
     
     let unScriptedFee = 5
     let scriptedFee = 9
 
-    let isScripted = match assetInfo(valueOrElse(w.assetId, proxyWaves)) {
+    let isScripted = match assetInfo(valueOrElse(w.assetId, PROXYWAVES)) {
         case asset:Asset =>
         if (asset.scripted) then {
             true
@@ -66,35 +66,33 @@ func checkFee(w:TransferTransaction) = {
 }
 
 func getStatus(key: ByteVector) = {
-    getInteger(addressFromPublicKey(digiliraPay), toBase58String(key)).valueOrElse(0)
+    getInteger(addressFromPublicKey(DIGILIRAPAY), toBase58String(key)).valueOrElse(0)
 }
 
 match (tx) {
     case w:TransferTransaction  =>
         let myStatus = getStatus((w.sender.bytes))
         let recipientStatus = getStatus((addressFromRecipient(w.recipient).bytes))
-        let assetStatus = getStatus((valueOrElse(w.assetId, proxyWaves)))
+        let assetStatus = getStatus((valueOrElse(w.assetId, PROXYWAVES)))
 
         let digiliraRecipient = recipientStatus > 0
 
-        let myStatusBanned = myStatus == banned
-        let recipientStatusBanned = recipientStatus == banned
-        let assetStatusBanned = assetStatus == banned
+        let myStatusBanned = myStatus == BANNED
+        let recipientStatusBanned = recipientStatus == BANNED
+        let assetStatusBanned = assetStatus == BANNED
 
-        let somethingBanned = myStatusBanned || recipientStatusBanned || assetStatusBanned
+        let isFeeRecoveryToken = w.feeAssetId == RECOVERYTOKEN
+        let isRecipientGateway = w.recipient == addressFromPublicKey(GATEWAY)
 
-        let isFeeRecoveryToken = w.feeAssetId == recoveryToken
-        let isRecipientGateway = w.recipient == addressFromPublicKey(gateway)
+        let isFeePaymentToken = w.feeAssetId == PAYMENTTOKEN
+        let isFeeSponsorToken = w.feeAssetId == SPONSORTOKEN
 
-        let isFeePaymentToken = w.feeAssetId == paymentToken
-        let isFeeSponsorToken = w.feeAssetId == sponsorToken
+        let isExclusiveToken = DIGILIRAPAYONLY == valueOrElse(assetStatus,0)
+        let isDigiliraPayExclusive = DIGILIRAPAYONLY > valueOrElse(assetStatus,0)
 
-        let isExclusiveToken = digiliraPayOnly == valueOrElse(assetStatus,0)
-        let isDigiliraPayExclusive = digiliraPayOnly > valueOrElse(assetStatus,0)
-
-        let permissionTransferToDP = valueOrElse(recipientStatus,0) < valueOrElse(assetStatus,banned) || valueOrElse(myStatus,0) < valueOrElse(assetStatus,banned)
-        let permissionPayment = fundBlock > valueOrElse(assetStatus,0) && paymentBlock <= valueOrElse(assetStatus,0)
-        let permissionTransferNotDP = transferBlock > valueOrElse(assetStatus,0) || paymentFundBlock <= valueOrElse(assetStatus,0)
+        let permissionTransferToDP = valueOrElse(recipientStatus,0) < valueOrElse(assetStatus,BANNED) || valueOrElse(myStatus,0) < valueOrElse(assetStatus,BANNED)
+        let permissionPayment = FUNDBLOCK > valueOrElse(assetStatus,0) && PAYMENTBLOCK <= valueOrElse(assetStatus,0)
+        let permissionTransferNotDP = TRANSFERBLOCK > valueOrElse(assetStatus,0) || PAYMENTFUNDBLOCK <= valueOrElse(assetStatus,0)
 
         let isRecovery = digiliraRecipient && isFeeRecoveryToken && isRecipientGateway && myStatusBanned
 
@@ -133,9 +131,7 @@ match (tx) {
 
             let prolog = "Transfer to not DigiliraPay recipient: ";
 
-            if (isFeeSponsorToken) then {
-                throw(prolog + "Sponsor Token cannot be used.")
-            } else if (isFeePaymentToken) then {
+            if (isFeePaymentToken) then {
                 throw(prolog + "Payment Token cannot be used.")
             } else if (myStatusBanned) then {
                 throw(prolog + "This account has been suspended.")
@@ -147,13 +143,16 @@ match (tx) {
         }
     case t:SetScriptTransaction | DataTransaction =>
         let s1 = if(sigVerify(t.bodyBytes, t.proofs[0], t.senderPublicKey)) then 1 else 0
-        let s2 = if(sigVerify(t.bodyBytes, t.proofs[1], digiliraPay)) then 1 else 0
+        let s2 = if(sigVerify(t.bodyBytes, t.proofs[1], DIGILIRAPAY)) then 1 else 0
 
         if (s1 + s2 == 2) then {
             true 
         } else {
-            throw("Unauthorized")
+            throw("Integrity Check Failed!")
         }
+    case x: LeaseTransaction | LeaseCancelTransaction | InvokeScriptTransaction => {
+        sigVerify(tx.bodyBytes, tx.proofs[0], tx.senderPublicKey)
+    }
     case _ =>
         recovery()
  }
